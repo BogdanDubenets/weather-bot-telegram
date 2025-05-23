@@ -343,12 +343,21 @@ class WeatherBot:
             logger.error(f"Get last payment error: {e}")
             return None
 
-# Ініціалізація бота
-weather_bot = WeatherBot()
+# Ініціалізація бота (тільки якщо є токени)
+weather_bot = None
+if BOT_TOKEN and OPENWEATHER_API_KEY:
+    weather_bot = WeatherBot()
+    logger.info("✅ WeatherBot initialized successfully")
+else:
+    logger.error("❌ Missing BOT_TOKEN or OPENWEATHER_API_KEY")
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     """Обробка webhook від Telegram"""
+    if not weather_bot:
+        logger.error("Weather bot not initialized")
+        return jsonify({'status': 'error', 'message': 'Bot not initialized'})
+    
     try:
         update = request.get_json()
         logger.info(f"Received update: {update}")
@@ -376,6 +385,9 @@ def webhook():
 
 def handle_message(message):
     """Обробка текстових повідомлень"""
+    if not weather_bot:
+        return
+    
     chat_id = message['chat']['id']
     user = message['from']
     
@@ -440,6 +452,9 @@ def handle_weather_command(chat_id):
 
 def handle_callback_query(callback_query):
     """Обробка натискань кнопок"""
+    if not weather_bot:
+        return
+    
     chat_id = callback_query['message']['chat']['id']
     data = callback_query['data']
     
@@ -476,10 +491,14 @@ def handle_callback_query(callback_query):
 
 def handle_pre_checkout(pre_checkout_query):
     """Обробка pre-checkout запиту"""
-    weather_bot.answer_pre_checkout_query(pre_checkout_query['id'], True)
+    if weather_bot:
+        weather_bot.answer_pre_checkout_query(pre_checkout_query['id'], True)
 
 def handle_successful_payment(message):
     """Обробка успішного платежу"""
+    if not weather_bot:
+        return
+    
     chat_id = message['chat']['id']
     user_id = message['from']['id']
     payment = message['successful_payment']
@@ -514,6 +533,9 @@ def handle_successful_payment(message):
 
 def handle_location(message):
     """Обробка геолокації"""
+    if not weather_bot:
+        return
+    
     chat_id = message['chat']['id']
     user_id = message['from']['id']
     location = message['location']
@@ -554,25 +576,50 @@ def handle_location(message):
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'bot_initialized': weather_bot is not None,
+        'has_bot_token': BOT_TOKEN is not None,
+        'has_weather_key': OPENWEATHER_API_KEY is not None,
+        'webhook_url': WEBHOOK_URL
+    })
 
 @app.route('/')
 def index():
     """Головна сторінка"""
     return "🌤️ Погода без сюрпризів - Bot is running!"
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    
-    # Встановлення webhook
+# Встановлення webhook при запуску
+def setup_webhook():
+    """Встановлення webhook"""
     if WEBHOOK_URL and BOT_TOKEN:
         webhook_url = f"{WEBHOOK_URL}/webhook"
         set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
         
         try:
             response = requests.post(set_webhook_url, data={'url': webhook_url}, timeout=10)
-            logger.info(f"Webhook setup response: {response.json()}")
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Webhook setup successful: {webhook_url}")
+            else:
+                logger.error(f"❌ Webhook setup failed: {result}")
         except Exception as e:
-            logger.error(f"Webhook setup error: {e}")
+            logger.error(f"❌ Webhook setup error: {e}")
+    else:
+        logger.warning("⚠️ WEBHOOK_URL or BOT_TOKEN not set - webhook not configured")
+
+if __name__ == '__main__':
+    # Отримання порту з змінної середовища
+    port = int(os.environ.get('PORT', 8080))
     
+    logger.info(f"🚀 Starting Flask app on port {port}")
+    logger.info(f"📍 Bot Token present: {bool(BOT_TOKEN)}")
+    logger.info(f"🌤️ Weather API Key present: {bool(OPENWEATHER_API_KEY)}")
+    logger.info(f"🔗 Webhook URL: {WEBHOOK_URL or 'Not set'}")
+    
+    # Встановлення webhook
+    setup_webhook()
+    
+    # Запуск Flask додатку
     app.run(host='0.0.0.0', port=port, debug=False)
