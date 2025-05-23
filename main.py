@@ -56,16 +56,17 @@ class WeatherBot:
         conn.commit()
         conn.close()
     
-    def send_message(self, chat_id, text, reply_markup=None, parse_mode='Markdown'):
-        """Відправка повідомлення"""
+    def send_message(self, chat_id, text, reply_markup=None, parse_mode=None):
+        """Відправка повідомлення без форматування"""
         url = f"{self.base_url}/sendMessage"
         data = {
             'chat_id': chat_id,
-            'text': text,
-            'parse_mode': parse_mode
+            'text': text
         }
         if reply_markup:
             data['reply_markup'] = json.dumps(reply_markup)
+        if parse_mode:
+            data['parse_mode'] = parse_mode
         
         try:
             logger.info(f"Sending message to {chat_id}: {text[:50]}...")
@@ -233,6 +234,7 @@ class WeatherBot:
             sunrise_time = datetime.fromtimestamp(sunrise_timestamp).strftime('%H:%M')
             sunset_time = datetime.fromtimestamp(sunset_timestamp).strftime('%H:%M')
             
+            # Безпечне форматування без проблемних символів
             header_message = f"""🌤️ ПРОГНОЗ ПОГОДИ ОТРИМАНО!
 
 📍 Локація: {city_name}, Україна
@@ -240,8 +242,8 @@ class WeatherBot:
 {moon_info['icon']} Фаза місяця: {moon_info['phase']}
 
 🌬️ ЯКІСТЬ ПОВІТРЯ: {aqi_status}
-✅ PM2.5: {air_quality['components']['pm2_5']} μg/m³
-✅ O₃: {air_quality['components']['o3']} μg/m³
+✅ PM2.5: {air_quality['components']['pm2_5']} мкг/м³
+✅ O3: {air_quality['components']['o3']} мкг/м³
 
 🌅 Схід: {sunrise_time} | 🌇 Захід: {sunset_time}
 
@@ -276,12 +278,13 @@ class WeatherBot:
                     humidity = forecast_item['main']['humidity']
                     wind_speed = forecast_item['wind']['speed']
                     
+                    # Безпечне форматування
                     day_message = f"""📅 {day_name}
 {moon_info['icon']} Фаза місяця: {moon_info['phase']}
 
 🌬️ ЯКІСТЬ ПОВІТРЯ: {aqi_status}
-✅ PM2.5: {air_quality['components']['pm2_5']} μg/m³
-✅ O₃: {air_quality['components']['o3']} μg/m³
+✅ PM2.5: {air_quality['components']['pm2_5']} мкг/м³
+✅ O3: {air_quality['components']['o3']} мкг/м³
 
 ☀️ ТЕМПЕРАТУРА: {temp}°C (відчув. {feels_like}°C)
    {description}
@@ -449,15 +452,15 @@ def handle_message(message):
 def handle_start_command(chat_id):
     """Обробка команди /start"""
     logger.info(f"🚀 Handling /start command for chat {chat_id}")
-    message = """🌤️ *Вітаємо в "Погода без сюрпризів"!*
+    message = """🌤️ Вітаємо в "Погода без сюрпризів"!
 
-🎯 *Наші можливості:*
+🎯 Наші можливості:
 • Точні прогнози погоди на 2-6 днів
 • Детальна якість повітря з рекомендаціями
 • Температура по частинах доби
 • Фаза місяця та час сходу/заходу сонця
 
-💫 *Тарифи:*
+💫 Тарифи:
 ⭐ 1 зірка = 2 дні
 ⭐⭐ 2 зірки = 3 дні
 ⭐⭐⭐ 3 зірки = 4 дні
@@ -481,7 +484,7 @@ def handle_weather_command(chat_id):
         ]
     }
     
-    message = """🌤️ *Оберіть тариф прогнозу погоди:*
+    message = """🌤️ Оберіть тариф прогнозу погоди:
 
 ⭐ 1 зірка = 2 дні (сьогодні + завтра)
 ⭐⭐ 2 зірки = 3 дні
