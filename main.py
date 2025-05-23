@@ -68,8 +68,14 @@ class WeatherBot:
             data['reply_markup'] = json.dumps(reply_markup)
         
         try:
+            logger.info(f"Sending message to {chat_id}: {text[:50]}...")
             response = requests.post(url, data=data, timeout=10)
-            return response.json()
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Message sent successfully")
+            else:
+                logger.error(f"❌ Message send failed: {result}")
+            return result
         except Exception as e:
             logger.error(f"Send message error: {e}")
             return None
@@ -87,8 +93,14 @@ class WeatherBot:
         }
         
         try:
+            logger.info(f"Creating invoice: {title} - {stars_amount} stars")
             response = requests.post(url, data=data, timeout=10)
-            return response.json()
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Invoice created successfully")
+            else:
+                logger.error(f"❌ Invoice creation failed: {result}")
+            return result
         except Exception as e:
             logger.error(f"Send invoice error: {e}")
             return None
@@ -102,8 +114,14 @@ class WeatherBot:
         }
         
         try:
+            logger.info(f"Answering pre-checkout query: {pre_checkout_query_id}")
             response = requests.post(url, data=data, timeout=10)
-            return response.json()
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Pre-checkout answered successfully")
+            else:
+                logger.error(f"❌ Pre-checkout answer failed: {result}")
+            return result
         except Exception as e:
             logger.error(f"Answer pre-checkout error: {e}")
             return None
@@ -111,6 +129,8 @@ class WeatherBot:
     def get_weather_forecast(self, lat, lon):
         """Отримання прогнозу погоди"""
         try:
+            logger.info(f"🌤️ Getting weather forecast for coordinates: {lat}, {lon}")
+            
             # 5-денний прогноз
             forecast_url = f"https://api.openweathermap.org/data/2.5/forecast"
             forecast_params = {
@@ -121,6 +141,17 @@ class WeatherBot:
                 'appid': self.weather_api_key
             }
             
+            logger.info(f"📡 Making forecast API request to: {forecast_url}")
+            logger.info(f"🔑 Using API key: {self.weather_api_key[:10]}..." if self.weather_api_key else "❌ No API key")
+            
+            forecast_response = requests.get(forecast_url, params=forecast_params, timeout=15)
+            logger.info(f"📡 Forecast API response status: {forecast_response.status_code}")
+            
+            if forecast_response.status_code != 200:
+                logger.error(f"❌ Forecast API error: {forecast_response.status_code}")
+                logger.error(f"❌ Forecast API response: {forecast_response.text}")
+                return None
+            
             # Якість повітря
             air_url = f"https://api.openweathermap.org/data/2.5/air_pollution"
             air_params = {
@@ -129,20 +160,23 @@ class WeatherBot:
                 'appid': self.weather_api_key
             }
             
-            forecast_response = requests.get(forecast_url, params=forecast_params, timeout=10)
-            air_response = requests.get(air_url, params=air_params, timeout=10)
+            logger.info(f"📡 Making air quality API request")
+            air_response = requests.get(air_url, params=air_params, timeout=15)
+            logger.info(f"📡 Air quality API response status: {air_response.status_code}")
             
-            if forecast_response.status_code == 200 and air_response.status_code == 200:
-                return {
-                    'forecast': forecast_response.json(),
-                    'air_quality': air_response.json()
-                }
-            else:
-                logger.error(f"Weather API error: {forecast_response.status_code}, {air_response.status_code}")
+            if air_response.status_code != 200:
+                logger.error(f"❌ Air quality API error: {air_response.status_code}")
+                logger.error(f"❌ Air quality API response: {air_response.text}")
                 return None
+            
+            logger.info("✅ Weather data retrieved successfully")
+            return {
+                'forecast': forecast_response.json(),
+                'air_quality': air_response.json()
+            }
                 
         except Exception as e:
-            logger.error(f"Weather API exception: {e}")
+            logger.error(f"❌ Weather API exception: {e}")
             return None
     
     def get_moon_phase(self):
@@ -177,27 +211,29 @@ class WeatherBot:
     
     def create_weather_messages(self, weather_data, stars_count):
         """Створення повідомлень з прогнозом"""
-        messages = []
-        forecast_data = weather_data['forecast']
-        air_data = weather_data['air_quality']
-        
-        # Заголовне повідомлення
-        city_name = forecast_data['city']['name']
-        timezone_offset = forecast_data['city']['timezone'] // 3600
-        moon_info = self.get_moon_phase()
-        
-        air_quality = air_data['list'][0]
-        aqi_labels = {1: 'Добра 🟢', 2: 'Задовільна 🟡', 3: 'Помірна 🟠', 4: 'Погана 🔴', 5: 'Дуже погана 🟣'}
-        aqi_status = aqi_labels.get(air_quality['main']['aqi'], 'Невідома')
-        
-        # Час сходу/заходу сонця
-        sunrise_timestamp = forecast_data['city']['sunrise'] + forecast_data['city']['timezone']
-        sunset_timestamp = forecast_data['city']['sunset'] + forecast_data['city']['timezone']
-        
-        sunrise_time = datetime.fromtimestamp(sunrise_timestamp).strftime('%H:%M')
-        sunset_time = datetime.fromtimestamp(sunset_timestamp).strftime('%H:%M')
-        
-        header_message = f"""🌤️ ПРОГНОЗ ПОГОДИ ОТРИМАНО!
+        try:
+            logger.info(f"📊 Creating weather messages for {stars_count} stars")
+            messages = []
+            forecast_data = weather_data['forecast']
+            air_data = weather_data['air_quality']
+            
+            # Заголовне повідомлення
+            city_name = forecast_data['city']['name']
+            timezone_offset = forecast_data['city']['timezone'] // 3600
+            moon_info = self.get_moon_phase()
+            
+            air_quality = air_data['list'][0]
+            aqi_labels = {1: 'Добра 🟢', 2: 'Задовільна 🟡', 3: 'Помірна 🟠', 4: 'Погана 🔴', 5: 'Дуже погана 🟣'}
+            aqi_status = aqi_labels.get(air_quality['main']['aqi'], 'Невідома')
+            
+            # Час сходу/заходу сонця
+            sunrise_timestamp = forecast_data['city']['sunrise'] + forecast_data['city']['timezone']
+            sunset_timestamp = forecast_data['city']['sunset'] + forecast_data['city']['timezone']
+            
+            sunrise_time = datetime.fromtimestamp(sunrise_timestamp).strftime('%H:%M')
+            sunset_time = datetime.fromtimestamp(sunset_timestamp).strftime('%H:%M')
+            
+            header_message = f"""🌤️ ПРОГНОЗ ПОГОДИ ОТРИМАНО!
 
 📍 Локація: {city_name}, Україна
 🕐 Часовий пояс: UTC{'+' if timezone_offset >= 0 else ''}{timezone_offset}
@@ -212,36 +248,36 @@ class WeatherBot:
 📊 Детальний прогноз надходить окремими повідомленнями...
 
 🔗 Хочете такий же прогноз? @pogoda_bez_syurpryziv_bot"""
-        
-        messages.append(header_message)
-        
-        # Повідомлення по днях (спрощена версія для Railway)
-        days_to_show = stars_count + 1
-        day_names = ['СЬОГОДНІ', 'ЗАВТРА', 'ПІСЛЯЗАВТРА', 'ЧЕРЕЗ 3 ДНІ', 'ЧЕРЕЗ 4 ДНІ', 'ЧЕРЕЗ 5 ДНІВ']
-        
-        call_to_actions = [
-            "🎯 Точні прогнози без сюрпризів! @pogoda_bez_syurpryziv_bot",
-            "⭐ Детальна погода за зірки! @pogoda_bez_syurpryziv_bot",
-            "🌤️ Професійні прогнози тут: @pogoda_bez_syurpryziv_bot",
-            "💫 Погода без сюрпризів: @pogoda_bez_syurpryziv_bot",
-            "🔮 Максимально детальні прогнози: @pogoda_bez_syurpryziv_bot",
-            "🌟 Найточніші прогнози: @pogoda_bez_syurpryziv_bot"
-        ]
-        
-        # Групування прогнозів по днях (спрощена логіка)
-        for day_index in range(min(days_to_show, len(day_names))):
-            day_name = day_names[day_index]
             
-            # Беремо дані з прогнозу (спрощено)
-            if day_index * 8 < len(forecast_data['list']):
-                forecast_item = forecast_data['list'][day_index * 8]
-                temp = round(forecast_item['main']['temp'])
-                feels_like = round(forecast_item['main']['feels_like'])
-                description = forecast_item['weather'][0]['description']
-                humidity = forecast_item['main']['humidity']
-                wind_speed = forecast_item['wind']['speed']
+            messages.append(header_message)
+            
+            # Повідомлення по днях (спрощена версія для Railway)
+            days_to_show = stars_count + 1
+            day_names = ['СЬОГОДНІ', 'ЗАВТРА', 'ПІСЛЯЗАВТРА', 'ЧЕРЕЗ 3 ДНІ', 'ЧЕРЕЗ 4 ДНІ', 'ЧЕРЕЗ 5 ДНІВ']
+            
+            call_to_actions = [
+                "🎯 Точні прогнози без сюрпризів! @pogoda_bez_syurpryziv_bot",
+                "⭐ Детальна погода за зірки! @pogoda_bez_syurpryziv_bot",
+                "🌤️ Професійні прогнози тут: @pogoda_bez_syurpryziv_bot",
+                "💫 Погода без сюрпризів: @pogoda_bez_syurpryziv_bot",
+                "🔮 Максимально детальні прогнози: @pogoda_bez_syurpryziv_bot",
+                "🌟 Найточніші прогнози: @pogoda_bez_syurpryziv_bot"
+            ]
+            
+            # Групування прогнозів по днях (спрощена логіка)
+            for day_index in range(min(days_to_show, len(day_names))):
+                day_name = day_names[day_index]
                 
-                day_message = f"""📅 {day_name}
+                # Беремо дані з прогнозу (спрощено)
+                if day_index * 8 < len(forecast_data['list']):
+                    forecast_item = forecast_data['list'][day_index * 8]
+                    temp = round(forecast_item['main']['temp'])
+                    feels_like = round(forecast_item['main']['feels_like'])
+                    description = forecast_item['weather'][0]['description']
+                    humidity = forecast_item['main']['humidity']
+                    wind_speed = forecast_item['wind']['speed']
+                    
+                    day_message = f"""📅 {day_name}
 {moon_info['icon']} Фаза місяця: {moon_info['phase']}
 
 🌬️ ЯКІСТЬ ПОВІТРЯ: {aqi_status}
@@ -254,11 +290,11 @@ class WeatherBot:
    💨 Вітер: {wind_speed} м/с
 
 {call_to_actions[day_index % len(call_to_actions)]}"""
-                
-                messages.append(day_message)
-        
-        # Завершальне повідомлення
-        final_message = f"""✅ ПРОГНОЗ ПОГОДИ ЗАВЕРШЕНО!
+                    
+                    messages.append(day_message)
+            
+            # Завершальне повідомлення
+            final_message = f"""✅ ПРОГНОЗ ПОГОДИ ЗАВЕРШЕНО!
 
 🎯 Ви отримали детальний прогноз на {days_to_show} днів для:
 📍 {city_name}, Україна
@@ -273,9 +309,13 @@ class WeatherBot:
 • Можете замовити прогноз для нового місця прямо зараз
 
 🛍️ Готові замовити новий прогноз?"""
-        
-        messages.append(final_message)
-        return messages
+            
+            messages.append(final_message)
+            logger.info(f"✅ Created {len(messages)} weather messages")
+            return messages
+        except Exception as e:
+            logger.error(f"❌ Error creating weather messages: {e}")
+            return []
     
     def save_user(self, user_data):
         """Збереження користувача в базу"""
@@ -296,6 +336,7 @@ class WeatherBot:
             
             conn.commit()
             conn.close()
+            logger.info(f"✅ User saved: {user_data.get('username', user_data['id'])}")
         except Exception as e:
             logger.error(f"Save user error: {e}")
     
@@ -319,6 +360,7 @@ class WeatherBot:
             
             conn.commit()
             conn.close()
+            logger.info(f"✅ Payment saved: {stars_amount} stars for user {user_id}")
         except Exception as e:
             logger.error(f"Save payment error: {e}")
     
@@ -338,7 +380,9 @@ class WeatherBot:
             result = cursor.fetchone()
             conn.close()
             
-            return result[0] if result else None
+            stars = result[0] if result else None
+            logger.info(f"📊 Last payment for user {user_id}: {stars} stars")
+            return stars
         except Exception as e:
             logger.error(f"Get last payment error: {e}")
             return None
@@ -391,11 +435,14 @@ def handle_message(message):
     chat_id = message['chat']['id']
     user = message['from']
     
+    logger.info(f"📨 Processing message from user {user.get('username', user['id'])}")
+    
     # Збереження користувача
     weather_bot.save_user(user)
     
     if 'text' in message:
         text = message['text']
+        logger.info(f"📝 Text message: {text}")
         
         if text == '/start':
             handle_start_command(chat_id)
@@ -403,10 +450,12 @@ def handle_message(message):
             handle_weather_command(chat_id)
     
     elif 'location' in message:
+        logger.info(f"📍 Location message received")
         handle_location(message)
 
 def handle_start_command(chat_id):
     """Обробка команди /start"""
+    logger.info(f"🚀 Handling /start command for chat {chat_id}")
     message = """🌤️ *Вітаємо в "Погода без сюрпризів"!*
 
 🎯 *Наші можливості:*
@@ -428,6 +477,7 @@ def handle_start_command(chat_id):
 
 def handle_weather_command(chat_id):
     """Обробка команди /weather"""
+    logger.info(f"🌤️ Handling /weather command for chat {chat_id}")
     reply_markup = {
         'inline_keyboard': [
             [{'text': '⭐ 1 зірка', 'callback_data': 'weather_1_star'}],
@@ -457,6 +507,8 @@ def handle_callback_query(callback_query):
     
     chat_id = callback_query['message']['chat']['id']
     data = callback_query['data']
+    
+    logger.info(f"🔘 Handling callback query: {data}")
     
     if data.startswith('weather_'):
         # Визначаємо кількість зірок
@@ -491,6 +543,7 @@ def handle_callback_query(callback_query):
 
 def handle_pre_checkout(pre_checkout_query):
     """Обробка pre-checkout запиту"""
+    logger.info(f"💳 Handling pre-checkout query")
     if weather_bot:
         weather_bot.answer_pre_checkout_query(pre_checkout_query['id'], True)
 
@@ -502,6 +555,8 @@ def handle_successful_payment(message):
     chat_id = message['chat']['id']
     user_id = message['from']['id']
     payment = message['successful_payment']
+    
+    logger.info(f"💰 Processing successful payment: {payment['total_amount']} stars")
     
     # Збереження платежу
     weather_bot.save_payment(
@@ -534,6 +589,7 @@ def handle_successful_payment(message):
 def handle_location(message):
     """Обробка геолокації"""
     if not weather_bot:
+        logger.error("❌ Weather bot not initialized")
         return
     
     chat_id = message['chat']['id']
@@ -543,24 +599,43 @@ def handle_location(message):
     lat = location['latitude']
     lon = location['longitude']
     
+    logger.info(f"📍 Processing location: {lat}, {lon}")
+    
+    # Відправка повідомлення про обробку
+    weather_bot.send_message(chat_id, "🔄 Обробляємо вашу геолокацію та отримуємо прогноз погоди...")
+    
     # Отримання останнього платежу користувача
     stars_count = weather_bot.get_last_payment(user_id)
     
     if not stars_count:
+        logger.error(f"❌ No payment found for user {user_id}")
         weather_bot.send_message(chat_id, "❌ Спочатку оплатіть прогноз командою /weather")
         return
+    
+    logger.info(f"💫 Found payment: {stars_count} stars for user {user_id}")
     
     # Отримання прогнозу
     weather_data = weather_bot.get_weather_forecast(lat, lon)
     
     if not weather_data:
-        weather_bot.send_message(chat_id, "❌ Помилка отримання даних про погоду. Спробуйте пізніше.")
+        logger.error("❌ Failed to get weather data")
+        weather_bot.send_message(chat_id, "❌ Помилка отримання даних про погоду. Спробуйте пізніше або зверніться до підтримки.")
         return
+    
+    logger.info("✅ Weather data retrieved, creating messages...")
     
     # Створення та відправка повідомлень
     messages = weather_bot.create_weather_messages(weather_data, stars_count)
     
+    if not messages:
+        logger.error("❌ Failed to create weather messages")
+        weather_bot.send_message(chat_id, "❌ Помилка створення прогнозу. Спробуйте пізніше.")
+        return
+    
+    logger.info(f"📤 Sending {len(messages)} weather messages")
+    
     for i, msg in enumerate(messages):
+        logger.info(f"📤 Sending message {i+1}/{len(messages)}")
         weather_bot.send_message(chat_id, msg)
         
         # Додаємо кнопки до останнього повідомлення
@@ -570,56 +645,3 @@ def handle_location(message):
                     [{'text': '🌤️ Замовити новий прогноз', 'callback_data': 'new_forecast'}],
                     [{'text': '📍 Змінити локацію', 'callback_data': 'change_location'}]
                 ]
-            }
-            weather_bot.send_message(chat_id, msg, final_markup)
-
-@app.route('/health', methods=['GET'])
-def health():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy', 
-        'timestamp': datetime.now().isoformat(),
-        'bot_initialized': weather_bot is not None,
-        'has_bot_token': BOT_TOKEN is not None,
-        'has_weather_key': OPENWEATHER_API_KEY is not None,
-        'webhook_url': WEBHOOK_URL
-    })
-
-@app.route('/')
-def index():
-    """Головна сторінка"""
-    return "🌤️ Погода без сюрпризів - Bot is running!"
-
-# Встановлення webhook при запуску
-def setup_webhook():
-    """Встановлення webhook"""
-    if WEBHOOK_URL and BOT_TOKEN:
-        webhook_url = f"{WEBHOOK_URL}/webhook"
-        set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
-        
-        try:
-            response = requests.post(set_webhook_url, data={'url': webhook_url}, timeout=10)
-            result = response.json()
-            if result.get('ok'):
-                logger.info(f"✅ Webhook setup successful: {webhook_url}")
-            else:
-                logger.error(f"❌ Webhook setup failed: {result}")
-        except Exception as e:
-            logger.error(f"❌ Webhook setup error: {e}")
-    else:
-        logger.warning("⚠️ WEBHOOK_URL or BOT_TOKEN not set - webhook not configured")
-
-if __name__ == '__main__':
-    # Отримання порту з змінної середовища
-    port = int(os.environ.get('PORT', 8080))
-    
-    logger.info(f"🚀 Starting Flask app on port {port}")
-    logger.info(f"📍 Bot Token present: {bool(BOT_TOKEN)}")
-    logger.info(f"🌤️ Weather API Key present: {bool(OPENWEATHER_API_KEY)}")
-    logger.info(f"🔗 Webhook URL: {WEBHOOK_URL or 'Not set'}")
-    
-    # Встановлення webhook
-    setup_webhook()
-    
-    # Запуск Flask додатку
-    app.run(host='0.0.0.0', port=port, debug=False)
