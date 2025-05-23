@@ -251,7 +251,7 @@ class WeatherBot:
             
             messages.append(header_message)
             
-            # Повідомлення по днях (спрощена версія для Railway)
+            # Повідомлення по днях
             days_to_show = stars_count + 1
             day_names = ['СЬОГОДНІ', 'ЗАВТРА', 'ПІСЛЯЗАВТРА', 'ЧЕРЕЗ 3 ДНІ', 'ЧЕРЕЗ 4 ДНІ', 'ЧЕРЕЗ 5 ДНІВ']
             
@@ -264,11 +264,10 @@ class WeatherBot:
                 "🌟 Найточніші прогнози: @pogoda_bez_syurpryziv_bot"
             ]
             
-            # Групування прогнозів по днях (спрощена логіка)
+            # Групування прогнозів по днях
             for day_index in range(min(days_to_show, len(day_names))):
                 day_name = day_names[day_index]
                 
-                # Беремо дані з прогнозу (спрощено)
                 if day_index * 8 < len(forecast_data['list']):
                     forecast_item = forecast_data['list'][day_index * 8]
                     temp = round(forecast_item['main']['temp'])
@@ -387,7 +386,7 @@ class WeatherBot:
             logger.error(f"Get last payment error: {e}")
             return None
 
-# Ініціалізація бота (тільки якщо є токени)
+# Ініціалізація бота
 weather_bot = None
 if BOT_TOKEN and OPENWEATHER_API_KEY:
     weather_bot = WeatherBot()
@@ -406,18 +405,13 @@ def webhook():
         update = request.get_json()
         logger.info(f"Received update: {update}")
         
-        # Обробка повідомлень
         if 'message' in update:
             if 'successful_payment' in update['message']:
                 handle_successful_payment(update['message'])
             else:
                 handle_message(update['message'])
-        
-        # Обробка callback query (кнопки)
         elif 'callback_query' in update:
             handle_callback_query(update['callback_query'])
-        
-        # Обробка pre-checkout
         elif 'pre_checkout_query' in update:
             handle_pre_checkout(update['pre_checkout_query'])
         
@@ -437,7 +431,6 @@ def handle_message(message):
     
     logger.info(f"📨 Processing message from user {user.get('username', user['id'])}")
     
-    # Збереження користувача
     weather_bot.save_user(user)
     
     if 'text' in message:
@@ -511,7 +504,6 @@ def handle_callback_query(callback_query):
     logger.info(f"🔘 Handling callback query: {data}")
     
     if data.startswith('weather_'):
-        # Визначаємо кількість зірок
         if 'star' in data:
             stars_count = 1
         else:
@@ -558,7 +550,6 @@ def handle_successful_payment(message):
     
     logger.info(f"💰 Processing successful payment: {payment['total_amount']} stars")
     
-    # Збереження платежу
     weather_bot.save_payment(
         user_id,
         payment['total_amount'],
@@ -566,7 +557,6 @@ def handle_successful_payment(message):
         payment['telegram_payment_charge_id']
     )
     
-    # Запит геолокації
     reply_markup = {
         'keyboard': [[{'text': '📍 Поділитися локацією', 'request_location': True}]],
         'resize_keyboard': True,
@@ -601,10 +591,8 @@ def handle_location(message):
     
     logger.info(f"📍 Processing location: {lat}, {lon}")
     
-    # Відправка повідомлення про обробку
     weather_bot.send_message(chat_id, "🔄 Обробляємо вашу геолокацію та отримуємо прогноз погоди...")
     
-    # Отримання останнього платежу користувача
     stars_count = weather_bot.get_last_payment(user_id)
     
     if not stars_count:
@@ -614,7 +602,6 @@ def handle_location(message):
     
     logger.info(f"💫 Found payment: {stars_count} stars for user {user_id}")
     
-    # Отримання прогнозу
     weather_data = weather_bot.get_weather_forecast(lat, lon)
     
     if not weather_data:
@@ -624,7 +611,6 @@ def handle_location(message):
     
     logger.info("✅ Weather data retrieved, creating messages...")
     
-    # Створення та відправка повідомлень
     messages = weather_bot.create_weather_messages(weather_data, stars_count)
     
     if not messages:
@@ -638,10 +624,82 @@ def handle_location(message):
         logger.info(f"📤 Sending message {i+1}/{len(messages)}")
         weather_bot.send_message(chat_id, msg)
         
-        # Додаємо кнопки до останнього повідомлення
         if i == len(messages) - 1:
             final_markup = {
                 'inline_keyboard': [
                     [{'text': '🌤️ Замовити новий прогноз', 'callback_data': 'new_forecast'}],
                     [{'text': '📍 Змінити локацію', 'callback_data': 'change_location'}]
                 ]
+            }
+            weather_bot.send_message(chat_id, "🎉 Прогноз готовий! Оберіть наступну дію:", final_markup)
+    
+    logger.info("✅ Weather forecast process completed successfully")
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'bot_initialized': weather_bot is not None,
+        'has_bot_token': BOT_TOKEN is not None,
+        'has_weather_key': OPENWEATHER_API_KEY is not None,
+        'webhook_url': WEBHOOK_URL
+    })
+
+@app.route('/')
+def index():
+    """Головна сторінка"""
+    return "🌤️ Погода без сюрпризів - Bot is running!"
+
+@app.route('/test-weather')
+def test_weather():
+    """Тестовий endpoint для перевірки Weather API"""
+    if not weather_bot:
+        return jsonify({'error': 'Bot not initialized'})
+    
+    lat, lon = 50.4501, 30.5234
+    
+    try:
+        weather_data = weather_bot.get_weather_forecast(lat, lon)
+        if weather_data:
+            return jsonify({
+                'status': 'success',
+                'city': weather_data['forecast']['city']['name'],
+                'forecast_count': len(weather_data['forecast']['list']),
+                'air_quality_aqi': weather_data['air_quality']['list'][0]['main']['aqi']
+            })
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to get weather data'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
+
+def setup_webhook():
+    """Встановлення webhook"""
+    if WEBHOOK_URL and BOT_TOKEN:
+        webhook_url = f"{WEBHOOK_URL}/webhook"
+        set_webhook_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+        
+        try:
+            response = requests.post(set_webhook_url, data={'url': webhook_url}, timeout=10)
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Webhook setup successful: {webhook_url}")
+            else:
+                logger.error(f"❌ Webhook setup failed: {result}")
+        except Exception as e:
+            logger.error(f"❌ Webhook setup error: {e}")
+    else:
+        logger.warning("⚠️ WEBHOOK_URL or BOT_TOKEN not set - webhook not configured")
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    
+    logger.info(f"🚀 Starting Flask app on port {port}")
+    logger.info(f"📍 Bot Token present: {bool(BOT_TOKEN)}")
+    logger.info(f"🌤️ Weather API Key present: {bool(OPENWEATHER_API_KEY)}")
+    logger.info(f"🔗 Webhook URL: {WEBHOOK_URL or 'Not set'}")
+    
+    setup_webhook()
+    
+    app.run(host='0.0.0.0', port=port, debug=False)
