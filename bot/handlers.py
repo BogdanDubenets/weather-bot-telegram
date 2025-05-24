@@ -113,6 +113,9 @@ class TelegramHandlers:
                 return self.handle_help_command(chat_id)
             elif text == '/stats' and self._is_admin_user(user['id']):
                 return self.handle_stats_command(chat_id)
+            else:
+                # Якщо це не команда, просто нагадуємо про команди
+                return self.send_message(chat_id, "🌤️ Для замовлення прогнозу погоди використовуйте команду /weather")
         
         elif 'location' in message:
             logger.info(f"📍 Location message received")
@@ -250,7 +253,7 @@ class TelegramHandlers:
             
             return self.send_message(
                 chat_id, 
-                "📍 Надішліть нову геолокацію або напишіть назву міста:",
+                "📍 Надішліть вашу геолокацію:",
                 reply_markup
             )
         
@@ -397,6 +400,9 @@ class TelegramHandlers:
     
     def _is_admin_user(self, user_id: int) -> bool:
         """Перевірка чи є користувач адміністратором"""
+        # Додайте сюди ID адміністраторів
+        admin_ids = [5648307936]  # Замініть на реальні ID
+        return user_id in admin_ids
         # Додайте сюди ID адміністраторів
         admin_ids = [5648307936]  # Замініть на реальні ID
         return user_id in admin_ids
