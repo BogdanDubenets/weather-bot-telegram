@@ -10,7 +10,7 @@ Professional weather forecasting bot with Telegram Stars payment system.
 - 🌙 **Moon phases** and sunrise/sunset times
 - 📱 **Separate messages** for each day (easy sharing)
 - 🔄 **Smart re-ordering** system
-- 🌍 **Location-based** forecasts
+- 📍 **Location-based** forecasts (via geolocation)
 
 ## 💰 Pricing Plans
 
